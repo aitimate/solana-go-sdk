@@ -5,8 +5,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-
 	"github.com/blocto/solana-go-sdk/common"
+
 	"github.com/blocto/solana-go-sdk/pkg/bincode"
 )
 
@@ -27,27 +27,29 @@ type NewTransactionParam struct {
 }
 
 // NewTransaction create a new tx by message and signer. it will reserve signatures slot.
-func NewTransaction(param NewTransactionParam) (Transaction, error) {
+func NewTransaction(param NewTransactionParam, isSkipSign ...bool) (Transaction, error) {
 	signatures := make([]Signature, 0, param.Message.Header.NumRequireSignatures)
 	for i := uint8(0); i < param.Message.Header.NumRequireSignatures; i++ {
 		signatures = append(signatures, make([]byte, 64))
 	}
 
-	m := map[common.PublicKey]uint8{}
-	for i := uint8(0); i < param.Message.Header.NumRequireSignatures; i++ {
-		m[param.Message.Accounts[i]] = i
-	}
-
-	data, err := param.Message.Serialize()
-	if err != nil {
-		return Transaction{}, fmt.Errorf("failed to serialize message, err: %v", err)
-	}
-	for _, signer := range param.Signers {
-		idx, ok := m[signer.PublicKey]
-		if !ok {
-			return Transaction{}, fmt.Errorf("%w, %v is not a signer", ErrTransactionAddNotNecessarySignatures, signer.PublicKey)
+	if len(isSkipSign) == 0 || !isSkipSign[0] {
+		m := map[common.PublicKey]uint8{}
+		for i := uint8(0); i < param.Message.Header.NumRequireSignatures; i++ {
+			m[param.Message.Accounts[i]] = i
 		}
-		signatures[idx] = signer.Sign(data)
+
+		data, err := param.Message.Serialize()
+		if err != nil {
+			return Transaction{}, fmt.Errorf("failed to serialize message, err: %v", err)
+		}
+		for _, signer := range param.Signers {
+			idx, ok := m[signer.PublicKey]
+			if !ok {
+				return Transaction{}, fmt.Errorf("%w, %v is not a signer", ErrTransactionAddNotNecessarySignatures, signer.PublicKey)
+			}
+			signatures[idx] = signer.Sign(data)
+		}
 	}
 
 	return Transaction{
